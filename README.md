@@ -68,7 +68,10 @@ The admin panel is available at [http://127.0.0.1:8000/admin/](http://127.0.0.1:
 
 Use these test cases to verify the behavior of the manual frame upload in the admin panel. Paste the frames into the textarea form for testing.
 
+## To go into the bulk update admin view enter the registered FramwRaw model and a bulk update button appears in the top right corner
+
 ---
+
 
 ## 1. Valid Frames
 
