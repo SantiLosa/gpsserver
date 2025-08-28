@@ -1,128 +1,126 @@
-# GPS Tracking Protocol Challenge (IGX v1.2) – with persistence and Admin
+# GPS Server Setup Guide
 
-This repository contains a **technical challenge** based on an extended commercial GPS protocol.  
-The goal is to parse, validate, and process frames with position data, odometer, and additional parameters, **store them in Django/DRF models**, and provide a **simple Admin view** to manually upload frames.
+Follow these steps to set up the project using Anaconda and run the development server.
 
 ---
 
-## Example frame
+## 1. Install Anaconda
+Download and install Anaconda from [https://www.anaconda.com/](https://www.anaconda.com/).
 
+---
+
+## 2. Create a new environment
+Open your terminal and run:
+
+```bash
+conda create -n gpsserver python=3.12
 ```
-$IGX,1.2,359710123456789,0045,210825,160455,3436.2233,S,05822.8955,W,31.5,270,12.4,3,11,0.8,12345.6,54.3,12.1,00A3,ODO_MODE=ABS;TEMP_C=36.7;DRIVER_ID=AB12-XY9;FW=2025.08.1*07
+
+This will create a new environment named `gpsserver` with Python 3.12.
+
+---
+
+## 3. Activate the environment
+```bash
+conda activate gpsserver
 ```
 
 ---
 
-## IGX v1.2 Protocol
+## 4. Install project dependencies
+If you have a `requirements.txt` file:
 
-### Delimiters
-- Start: `$`
-- End: `\r\n`
-- Checksum: `*CC` (XOR of all ASCII bytes between `$` and `*`), 2-digit uppercase hex.
-
-### Separators
-- Fields: `,`
-- Extensions: `;` in the format `KEY=VALUE`
-
-### Fields (order)
-
-1. `proto` – Identifier (`IGX`)
-2. `ver` – Version (e.g. `1.2`)
-3. `imei` – Unique identifier (14–17 digits)
-4. `seq` – Sequence 0000–9999 with wrap-around
-5. `date` – UTC date `DDMMYY`
-6. `time` – UTC time `HHMMSS`
-7. `lat` – Latitude `DDMM.mmmm`
-8. `lat_hemi` – Hemisphere N/S
-9. `lon` – Longitude `DDDMM.mmmm`
-10. `lon_hemi` – Hemisphere E/W
-11. `speed_kmh` – Speed in km/h
-12. `course_deg` – Course 0–359°
-13. `alt_m` – Altitude (m)
-14. `fix` – Fix quality (0=no fix,2=2D,3=3D)
-15. `sats` – Number of satellites
-16. `hdop` – HDOP
-17. `odom_km` – Odometer (km)
-18. `fuel_pct` – Fuel percentage
-19. `batt_v` – Battery (V)
-20. `io_hex` – IO bitmask in hex (4 digits)
-21. `ext` – Extensions `key=value` separated by `;`
-
-### Coordinates example
-- `3436.2233,S` → -34° 36.2233′
-- `05822.8955,W` → -58° 22.8955′
+```bash
+pip install -r requirements.txt
+```
 
 ---
 
-## Bitmask `io_hex`
+## 5. Run database migrations
+```bash
+python manage.py migrate
+```
 
-Example: `00A3` → `0000 0000 1010 0011` → active bits 0,1,5,7.
-
-- bit 0: Ignition ON
-- bit 1: External power
-- bit 2: Door open
-- bit 3: Panic button
-- bit 4: Towing
-- bit 5: Geofence active
-- bit 6: Jamming detected
-- bit 7: Impact
-- 8–15: reserved
+This will set up the database and create all required tables.
 
 ---
 
-## Challenge
+## 6. Create a superuser
+```bash
+python manage.py createsuperuser
+```
 
-1. Parse the frame into a data structure.
-2. Validate checksum and value ranges (e.g. lat, lon, fuel%).
-3. Convert coordinates to decimal (e.g. -34.6037, -58.3810).
-4. Interpret the `io_hex` bitmask.
-5. Process extensions (`ext`) as a dictionary.
-6. **Persist** using Django/DRF models:
-   - Always save the raw frame in `FrameRaw`.
-   - Generate a `Position` with coordinates, fix, odometer, etc.
-   - Relate to a `Device` (IMEI).
-7. **Admin view**: allow pasting multiple frames (one per line) and process them in bulk.
+Follow the prompts to set username, email, and password.
 
 ---
 
-## Persistence requirements
+## 7. Run the development server
+```bash
+python manage.py runserver
+```
 
-- **Device**: stores IMEI and optional alias.
-- **FrameRaw**: saves the original frame, whether checksum was valid, whether it was processed, and any error.
-- **Position**: stores parsed data (decimal lat/lon, speed, fix, odometer, etc.) + extensions.
-- **ProcessingLog** (optional): to log events or errors.
-
----
-
-## Admin view (manual frame upload)
-
-- Simple form with a textarea.
-- Processes line by line:
-  - Validates format + checksum.
-  - Saves `FrameRaw`.
-  - If valid, generates `Position`.
-  - If invalid, fills the `error` field.
-- Result: shows summary “Processed N lines. OK=X, errors=Y”.
+Your server will now be accessible at [http://127.0.0.1:8000/](http://127.0.0.1:8000/).  
+The admin panel is available at [http://127.0.0.1:8000/admin/](http://127.0.0.1:8000/admin/) for manual GPS frame uploads.
 
 ---
 
-## Minimum test cases
+# Bulk Upload Test Cases
 
-1. Valid frame → `FrameRaw` + `Position`.
-2. Invalid checksum → `FrameRaw` with error, no `Position`.
-3. Duplicate (`device+seq`) → must not duplicate `Position`.
-4. Out-of-range values → rejection with error.
-5. Multiple extensions → stored as key–value structure.
-6. IO bitmask → persisted and interpreted according to the table.
-7. Bulk upload in Admin → correct OK/error counts displayed.
+Use these test cases to verify the behavior of the manual frame upload in the admin panel. Paste the frames into the textarea form for testing.
 
 ---
 
-## Bonus
+## 1. Valid Frames
 
-- Unit tests with valid and invalid frames.
-- Simulation of multiple frame ingestion and distance calculation using odometer.
-- Export positions to JSON.
-- Basic metrics: valid/invalid frames, duplicates avoided, parsing errors.
+These frames are all valid. Each line should create a `FrameRaw` and a `Position`.
+
+```text
+$IGX,1.2,123456789012345,001,210827,120000,3456.7890,N,09812.8955,W,60.5,180,15.0,3,12,0.5,1234.5,50.0,12.3,1A2B,ODO_MODE=ABS;TEMP_C=36.5;DRIVER_ID=AA11-BB22;FW=2025.08.1*54
+$IGX,1.2,987654321098765,002,210827,121500,4032.1234,S,07456.7890,E,45.0,90,10.5,2,8,1.0,5678.9,40.0,11.5,0F3C,ODO_MODE=TRIP;TEMP_C=28.0;DRIVER_ID=CC33-DD44;FW=2025.08.2*17
+$IGX,1.2,192837465091827,003,210827,123000,5123.4567,N,00123.4567,W,30.0,270,5.0,1,5,0.3,987.6,35.0,9.8,2B1D,ODO_MODE=ABS;TEMP_C=32.5;DRIVER_ID=EE55-FF66;FW=2025.08.3*5F
+```
 
 ---
+
+## 2. Out-of-Range Values
+
+This frame has an invalid latitude (latitude cannot exceed 90°). It should create a `FrameRaw` but **no `Position`**, and the error field should be populated.
+
+```text
+$IGX,1.2,555555555555555,006,210828,140000,9123.4567,N,01234.5678,E,50.0,90,10.0,3,10,1.0,1000.0,50.0,12.0,1F2E,ODO_MODE=ABS;TEMP_C=25.0;DRIVER_ID=ZZ99-YY88;FW=2025.08.5*7D
+```
+
+---
+
+## 3. Duplicate `device+seq`
+
+This dataset has 3 frames, but one of them is a duplicate by `device+seq`. Only 2 `Position` objects should be created. The duplicate should be logged as an error.
+
+```text
+$IGX,1.2,123456789012345,001,210827,120000,3456.7890,N,09812.8955,W,60.5,180,15.0,3,12,0.5,1234.5,50.0,12.3,1A2B,ODO_MODE=ABS;TEMP_C=36.5;DRIVER_ID=AA11-BB22;FW=2025.08.1*54
+$IGX,1.2,987654321098765,002,210827,121500,4032.1234,S,07456.7890,E,45.0,90,10.5,2,8,1.0,5678.9,40.0,11.5,0F3C,ODO_MODE=TRIP;TEMP_C=28.0;DRIVER_ID=CC33-DD44;FW=2025.08.2*17
+$IGX,1.2,123456789012345,001,210827,120000,3456.7890,N,09812.8955,W,60.5,180,15.0,3,12,0.5,1234.5,50.0,12.3,1A2B,ODO_MODE=ABS;TEMP_C=36.5;DRIVER_ID=AA11-BB22;FW=2025.08.1*54
+```
+
+---
+
+
+#### 4. Invalid Checksum
+
+Checksum is incorrect, frame is rejected:
+
+```text
+$IGX,1.2,123456789012345,001,210827,120000,3456.7890,N,09812.8955,W,60.5,180,15.0,3,12,0.5,1234.5,50.0,12.3,1A2B,ODO_MODE=ABS;TEMP_C=36.5;DRIVER_ID=AA11-BB22;FW=2025.08.1*00
+```
+
+- `FrameRaw.checksum_valid = False`
+- No Position created
+- Error logged
+- But Device is created
+
+**Notes:**
+
+- Each frame should create a `FrameRaw` object regardless of validity.
+- Valid frames create a `Position`.
+- Invalid frames populate `FrameRaw.error` and generate a `ProcessingLog`.
+- Duplicate `device+seq` frames are rejected for `Position` creation but still stored as `FrameRaw` with an error log.
